@@ -126,8 +126,8 @@
 </style>
 </head>
 <body>
-  <!-- Âm thanh khi vào phòng -->
-  <audio id="joinAudio" src="https://github.com/nhut990/files/raw/refs/heads/main/music/music02iwin.mp3" preload="auto"></audio>
+  <!-- Âm thanh khi vào phòng (luôn lặp lại) -->
+  <audio id="joinAudio" src="https://github.com/nhut990/files/raw/refs/heads/main/music/music02iwin.mp3" preload="auto" loop></audio>
 
   <div class="hd-toggle">
     <button class="hd-btn" id="btnHuongDan" onclick="toggleHuongDan()">HƯỚNG DẪN</button>
@@ -256,7 +256,7 @@
           remove(ref(db, `caro/${room}/players/${myMark}`)).then(() => {
             get(ref(db, `caro/${room}/players`)).then(snap => {
               if (!snap.exists()) {
-                remove(ref(db, `caro/${room}`));
+                remove(ref(db, `caro/{room}`));
               }
             });
           });
@@ -411,13 +411,12 @@
         let lastMsgKey = null;
         chatBox.innerHTML = `<b>[Phòng: ${room || "?"}]</b><br>`;
         if (data) {
-          const allMsgs = Object.entries(data); // [key, value]
+          const allMsgs = Object.entries(data);
           allMsgs.forEach(([key, m]) => {
             const div = document.createElement("div");
             div.innerHTML = `<b style="color:${m.mark==='X'?'#e74c3c':'#2980b9'}">${m.mark}</b>: ${m.text}`;
             chatBox.appendChild(div);
           });
-          // Lấy key của tin nhắn mới nhất
           if (allMsgs.length > 0) {
             lastMsgKey = allMsgs[allMsgs.length - 1][0];
             const lastMsg = allMsgs[allMsgs.length - 1][1];
@@ -435,7 +434,6 @@
       onValue(ref(db, `caro/${room}/players`), (snap) => {
         const data = snap.val() || {};
         const playerCount = Object.keys(data).length;
-        // Chỉ báo "đối thủ đã thoát phòng" nếu trước đó đã đủ 2 người mà giờ còn 1
         if (prevPlayerCount === 2 && playerCount === 1) {
           if ((myMark === "X" && !data.O) || (myMark === "O" && !data.X)) {
             showPopup("Đối thủ đã thoát phòng!", "#d35400");
