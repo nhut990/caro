@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Caro Online</title>
+<title>Caro Online Nâng Cấp</title>
 <style>
   body {
     font-family: Arial, sans-serif;
@@ -126,6 +126,9 @@
 </style>
 </head>
 <body>
+  <!-- Âm thanh khi vào phòng -->
+  <audio id="joinAudio" src="https://github.com/nhut990/files/raw/refs/heads/main/music/music02iwin.mp3" preload="auto"></audio>
+
   <div class="hd-toggle">
     <button class="hd-btn" id="btnHuongDan" onclick="toggleHuongDan()">HƯỚNG DẪN</button>
   </div>
@@ -183,6 +186,15 @@
       box.style.display = box.style.display === "block" ? "none" : "block";
     };
 
+    // iPhone/iOS tối ưu: phát âm thanh khi có thao tác người dùng (ở đây là nhấn nút Vào phòng)
+    function playJoinSound() {
+      const audio = document.getElementById("joinAudio");
+      try {
+        audio.currentTime = 0;
+        audio.play();
+      } catch (e) {}
+    }
+
     // Tạo bàn cờ
     function taoBan() {
       board.innerHTML = "";
@@ -204,6 +216,8 @@
 
     // Vào phòng
     window.vaoPhong = async function() {
+      playJoinSound(); // Phát âm thanh khi nhấn vào phòng, đảm bảo được iPhone hỗ trợ
+
       room = document.getElementById("roomInput").value.trim();
       if (!room) return alert("Nhập tên phòng!");
       document.getElementById("info").textContent = "Đang vào phòng...";
@@ -232,16 +246,14 @@
         set(turnRef, "X");
       }
 
-      prevPlayerCount = 1; // Khi vào phòng chỉ có mình
+      prevPlayerCount = 1;
       langNghe();
       langNgheChat();
       langNghePlayer();
 
       window.onbeforeunload = () => {
         if (room && myMark) {
-          // Xóa player của mình
           remove(ref(db, `caro/${room}/players/${myMark}`)).then(() => {
-            // Kiểm tra nếu không còn player nào thì xóa toàn bộ phòng
             get(ref(db, `caro/${room}/players`)).then(snap => {
               if (!snap.exists()) {
                 remove(ref(db, `caro/${room}`));
@@ -425,7 +437,6 @@
         const playerCount = Object.keys(data).length;
         // Chỉ báo "đối thủ đã thoát phòng" nếu trước đó đã đủ 2 người mà giờ còn 1
         if (prevPlayerCount === 2 && playerCount === 1) {
-          // Nếu là X mà không còn O, hoặc là O mà không còn X
           if ((myMark === "X" && !data.O) || (myMark === "O" && !data.X)) {
             showPopup("Đối thủ đã thoát phòng!", "#d35400");
           }
