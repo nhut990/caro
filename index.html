@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caro Online</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+    background: #fafafa;
+    margin: 0;
+    padding: 20px;
+  }
+  .hd-toggle {
+    margin-bottom: 6px;
+    display: inline-block;
+  }
+  .hd-btn {
+    background: #2980b9;
+    color: #fff;
+    border: none;
+    padding: 7px 18px;
+    border-radius: 7px;
+    font-size: 16px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-bottom: 2px;
+  }
+  .hd-btn:hover { background: #1c5a87; }
+  #huongDanBox {
+    display: none;
+    background: #fffbe6;
+    border: 1px solid #faad4d;
+    color: #2c3e50;
+    padding: 18px;
+    margin: 0 auto 12px auto;
+    max-width: 410px;
+    box-shadow: 0 2px 12px #0001;
+    border-radius: 10px;
+    transition: all 0.3s;
+    text-align: left;
+    position: relative;
+    z-index: 2;
+    font-size: 16px;
+  }
+  h1 { color: #2c3e50; margin-bottom: 5px; }
+  #controls {
+    margin-bottom: 10px;
+  }
+  input, button {
+    padding: 6px;
+    font-size: 15px;
+    margin: 3px;
+  }
+  #info {
+    margin-top: 5px;
+    font-weight: bold;
+    color: #333;
+  }
+  #winner {
+    margin-top: 10px;
+    font-size: 18px;
+    font-weight: bold;
+    color: #d35400;
+  }
+  #board {
+    display: grid;
+    justify-content: center;
+    margin: 20px auto;
+    gap: 2px;
+    user-select: none;
+  }
+  .cell {
+    width: 32px;
+    height: 32px;
+    border: 1px solid #ccc;
+    font-size: 22px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: white;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .cell:hover { background: #f0f0f0; }
+  #chatBox {
+    border: 1px solid #ccc;
+    width: 320px;
+    margin: 10px auto;
+    background: #fff;
+    padding: 5px;
+    height: 180px;
+    overflow-y: auto;
+    text-align: left;
+    position: relative;
+  }
+  #chatInput {
+    width: 240px;
+  }
+  .x-cell { color: #e74c3c; }
+  .o-cell { color: #2980b9; }
+  .win-cell { background: #ffe066 !important; }
+  #popupMsg {
+    position: fixed;
+    left: 50%;
+    top: 70px;
+    transform: translateX(-50%);
+    background: #fffbe6;
+    color: #333;
+    border: 1px solid #d35400;
+    box-shadow: 0 2px 8px #9994;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-size: 18px;
+    z-index: 99;
+    display: none;
+    pointer-events: none;
+    animation: fadeIn 0.3s;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0;}
+    to { opacity: 1;}
+  }
+</style>
+</head>
+<body>
+  <div class="hd-toggle">
+    <button class="hd-btn" id="btnHuongDan" onclick="toggleHuongDan()">HƯỚNG DẪN</button>
+  </div>
+  <div id="huongDanBox">
+    <div>
+      Hai người cùng nhập <b>Tên phòng</b> giống nhau, rồi nhấn <b>Vào phòng</b>.<br>
+      Người vào trước sẽ là <span style="color:#e74c3c"><b>🔴 X (đỏ)</b></span>, người vào sau là <span style="color:#2980b9"><b>🔵 O (xanh)</b></span>.<br>
+      <b>Chat:</b> Nhập và gửi tin nhắn, popup nổi sẽ hiện 2-3 giây khi có tin nhắn mới và sẽ lưu lại dưới khung chat.
+    </div>
+    <button class="hd-btn" onclick="toggleHuongDan()" style="background:#faad4d;color:#222;">ĐÓNG</button>
+  </div>
+  <h1>♟️ CARO ONLINE</h1>
+  <div id="controls">
+    <input id="roomInput" placeholder="Tên phòng...">
+    <button onclick="vaoPhong()">Vào phòng</button>
+    <button onclick="xoaBan()">Xóa bàn</button>
+  </div>
+
+  <div id="info">Chưa vào phòng</div>
+  <div id="winner"></div>
+  <div id="board"></div>
+
+  <div id="chatBox"></div>
+  <input id="chatInput" placeholder="Nhập tin nhắn...">
+  <button onclick="guiTinNhan()">Gửi</button>
+
+  <div id="popupMsg"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import { getDatabase, ref, set, onValue, get, remove, push } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+    // Firebase config
+    const firebaseConfig = {
+      databaseURL: "https://caro-f92be-default-rtdb.firebaseio.com/"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const SIZE = 15;
+    const board = document.getElementById("board");
+    const chatBox = document.getElementById("chatBox");
+    const winnerBox = document.getElementById("winner");
+    const popupMsg = document.getElementById("popupMsg");
+    let room = "";
+    let myMark = "";
+    let currentTurn = "X";
+    let isGameOver = false;
+    let winCells = [];
+    let lastChatMsgId = null;
+    let prevPlayerCount = 0;
+
+    // Hướng dẫn
+    window.toggleHuongDan = function() {
+      const box = document.getElementById("huongDanBox");
+      box.style.display = box.style.display === "block" ? "none" : "block";
+    };
+
+    // Tạo bàn cờ
+    function taoBan() {
+      board.innerHTML = "";
+      winCells = [];
+      board.style.gridTemplateColumns = `repeat(${SIZE}, 32px)`;
+      for (let i = 0; i < SIZE; i++) {
+        for (let j = 0; j < SIZE; j++) {
+          const o = document.createElement("div");
+          o.className = "cell";
+          o.id = `o_${i}_${j}`;
+          o.onclick = () => danhCo(i, j);
+          board.appendChild(o);
+        }
+      }
+      winnerBox.textContent = "";
+      isGameOver = false;
+    }
+    taoBan();
+
+    // Vào phòng
+    window.vaoPhong = async function() {
+      room = document.getElementById("roomInput").value.trim();
+      if (!room) return alert("Nhập tên phòng!");
+      document.getElementById("info").textContent = "Đang vào phòng...";
+
+      const playerRef = ref(db, `caro/${room}/players`);
+      const snapshot = await get(playerRef);
+      const players = snapshot.val() || {};
+
+      if (!players.X) {
+        myMark = "X";
+        set(ref(db, `caro/${room}/players/X`), true);
+      } else if (!players.O) {
+        myMark = "O";
+        set(ref(db, `caro/${room}/players/O`), true);
+      } else {
+        alert("Phòng đã đủ 2 người!");
+        return;
+      }
+
+      document.getElementById("info").textContent =
+        `Bạn đang ở phòng: ${room} | Bạn là ${myMark === "X" ? "🔴 X (đỏ)" : "🔵 O (xanh)"}`;
+
+      const turnRef = ref(db, `caro/${room}/turn`);
+      const turnSnap = await get(turnRef);
+      if (!turnSnap.exists()) {
+        set(turnRef, "X");
+      }
+
+      prevPlayerCount = 1; // Khi vào phòng chỉ có mình
+      langNghe();
+      langNgheChat();
+      langNghePlayer();
+
+      window.onbeforeunload = () => {
+        if (room && myMark) {
+          // Xóa player của mình
+          remove(ref(db, `caro/${room}/players/${myMark}`)).then(() => {
+            // Kiểm tra nếu không còn player nào thì xóa toàn bộ phòng
+            get(ref(db, `caro/${room}/players`)).then(snap => {
+              if (!snap.exists()) {
+                remove(ref(db, `caro/${room}`));
+              }
+            });
+          });
+        }
+      };
+    };
+
+    // Đánh cờ
+    function danhCo(x, y) {
+      if (!room) return alert("Chưa vào phòng!");
+      if (isGameOver) return;
+      if (myMark !== currentTurn) {
+        return alert("Chưa đến lượt bạn!");
+      }
+      const o = document.getElementById(`o_${x}_${y}`);
+      if (o.textContent) return;
+      set(ref(db, `caro/${room}/board/${x}_${y}`), myMark);
+
+      setTimeout(() => {
+        kiemTraThang(x, y, myMark);
+      }, 150);
+
+      set(ref(db, `caro/${room}/turn`), myMark === "X" ? "O" : "X");
+    }
+
+    function langNghe() {
+      onValue(ref(db, `caro/${room}/board`), (snap) => {
+        const data = snap.val();
+        document.querySelectorAll(".cell").forEach(c => {
+          c.textContent = "";
+          c.classList.remove("x-cell", "o-cell", "win-cell");
+        });
+        if (data) {
+          for (const k in data) {
+            const [x, y] = k.split("_");
+            const o = document.getElementById(`o_${x}_${y}`);
+            if (o) {
+              o.textContent = data[k];
+              o.classList.add(data[k] === "X" ? "x-cell" : "o-cell");
+            }
+          }
+        }
+        if (winCells.length > 0) {
+          winCells.forEach(([i, j]) => {
+            const o = document.getElementById(`o_${i}_${j}`);
+            if (o) o.classList.add("win-cell");
+          });
+        }
+      });
+      onValue(ref(db, `caro/${room}/turn`), (snap) => {
+        currentTurn = snap.val() || "X";
+        let msg = "";
+        if (myMark) {
+          msg = isGameOver ? "Kết thúc ván!" : (currentTurn === myMark ? "Đến lượt bạn" : "Đến lượt đối thủ");
+          document.getElementById("info").textContent =
+            `Bạn đang ở phòng: ${room} | Bạn là ${myMark === "X" ? "🔴 X" : "🔵 O"} - ${msg}`;
+        }
+      });
+      onValue(ref(db, `caro/${room}/winner`), (snap) => {
+        const winner = snap.val();
+        if (winner) {
+          isGameOver = true;
+          winnerBox.textContent = winner === "draw"
+            ? "Hòa! Không còn ô trống."
+            : `🎉 Người thắng: ${winner === "X" ? "🔴 X (đỏ)" : "🔵 O (xanh)"}`;
+        } else {
+          winnerBox.textContent = "";
+        }
+      });
+    }
+
+    function kiemTraThang(x, y, mark) {
+      const getCell = (i, j) => {
+        const o = document.getElementById(`o_${i}_${j}`);
+        return o && o.textContent;
+      };
+      const dirs = [
+        [0, 1], [1, 0], [1, 1], [1, -1]
+      ];
+      for (let d = 0; d < dirs.length; d++) {
+        let count = 1, cells = [[x, y]];
+        for (let step = 1; step < 5; step++) {
+          const nx = x + dirs[d][0] * step;
+          const ny = y + dirs[d][1] * step;
+          if (getCell(nx, ny) === mark) {
+            count++; cells.push([nx, ny]);
+          } else break;
+        }
+        for (let step = 1; step < 5; step++) {
+          const nx = x - dirs[d][0] * step;
+          const ny = y - dirs[d][1] * step;
+          if (getCell(nx, ny) === mark) {
+            count++; cells.push([nx, ny]);
+          } else break;
+        }
+        if (count >= 5) {
+          isGameOver = true;
+          winCells = cells;
+          set(ref(db, `caro/${room}/winner`), mark);
+          return;
+        }
+      }
+      let isFull = true;
+      for (let i = 0; i < SIZE; i++) {
+        for (let j = 0; j < SIZE; j++) {
+          if (!getCell(i, j)) {
+            isFull = false;
+            break;
+          }
+        }
+        if (!isFull) break;
+      }
+      if (isFull) {
+        set(ref(db, `caro/${room}/winner`), "draw");
+        isGameOver = true;
+      }
+    }
+
+    window.xoaBan = function() {
+      if (!room) return alert("Chưa vào phòng!");
+      remove(ref(db, `caro/${room}/board`));
+      set(ref(db, `caro/${room}/turn`), "X");
+      remove(ref(db, `caro/${room}/winner`));
+      winnerBox.textContent = "";
+      isGameOver = false;
+      winCells = [];
+      remove(ref(db, `caro/${room}/chat`));
+    };
+
+    window.guiTinNhan = function() {
+      if (!room || !myMark) return alert("Chưa vào phòng!");
+      const msg = document.getElementById("chatInput").value.trim();
+      if (!msg) return;
+      const chatRef = ref(db, `caro/${room}/chat`);
+      push(chatRef, { mark: myMark, text: msg });
+      document.getElementById("chatInput").value = "";
+    };
+
+    function showPopup(text, color = "#333") {
+      popupMsg.textContent = text;
+      popupMsg.style.display = "block";
+      popupMsg.style.color = color;
+      clearTimeout(popupMsg._timeout);
+      popupMsg._timeout = setTimeout(() => {
+        popupMsg.style.display = "none";
+      }, 2300);
+    }
+
+    function langNgheChat() {
+      onValue(ref(db, `caro/${room}/chat`), (snap) => {
+        const data = snap.val();
+        let lastMsgKey = null;
+        chatBox.innerHTML = `<b>[Phòng: ${room || "?"}]</b><br>`;
+        if (data) {
+          const allMsgs = Object.entries(data); // [key, value]
+          allMsgs.forEach(([key, m]) => {
+            const div = document.createElement("div");
+            div.innerHTML = `<b style="color:${m.mark==='X'?'#e74c3c':'#2980b9'}">${m.mark}</b>: ${m.text}`;
+            chatBox.appendChild(div);
+          });
+          // Lấy key của tin nhắn mới nhất
+          if (allMsgs.length > 0) {
+            lastMsgKey = allMsgs[allMsgs.length - 1][0];
+            const lastMsg = allMsgs[allMsgs.length - 1][1];
+            if (lastMsgKey !== lastChatMsgId) {
+              showPopup(`${lastMsg.mark}: ${lastMsg.text}`, lastMsg.mark === "X" ? "#e74c3c" : "#2980b9");
+              lastChatMsgId = lastMsgKey;
+            }
+          }
+          chatBox.scrollTop = chatBox.scrollHeight;
+        }
+      });
+    }
+
+    function langNghePlayer() {
+      onValue(ref(db, `caro/${room}/players`), (snap) => {
+        const data = snap.val() || {};
+        const playerCount = Object.keys(data).length;
+        // Chỉ báo "đối thủ đã thoát phòng" nếu trước đó đã đủ 2 người mà giờ còn 1
+        if (prevPlayerCount === 2 && playerCount === 1) {
+          // Nếu là X mà không còn O, hoặc là O mà không còn X
+          if ((myMark === "X" && !data.O) || (myMark === "O" && !data.X)) {
+            showPopup("Đối thủ đã thoát phòng!", "#d35400");
+          }
+        }
+        prevPlayerCount = playerCount;
+      });
+    }
+  </script>
+</body>
+</html>
