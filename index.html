@@ -159,7 +159,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-    import { getDatabase, ref, set, onValue, get, remove, push } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+    import { getDatabase, ref, set, onValue, get, remove, push, onDisconnect } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
     // Firebase config
     const firebaseConfig = {
       databaseURL: "https://caro-f92be-default-rtdb.firebaseio.com/"
@@ -186,7 +186,6 @@
       box.style.display = box.style.display === "block" ? "none" : "block";
     };
 
-    // iPhone/iOS tối ưu: phát âm thanh khi có thao tác người dùng (ở đây là nhấn nút Vào phòng)
     function playJoinSound() {
       const audio = document.getElementById("joinAudio");
       try {
@@ -195,7 +194,6 @@
       } catch (e) {}
     }
 
-    // Tạo bàn cờ
     function taoBan() {
       board.innerHTML = "";
       winCells = [];
@@ -216,7 +214,7 @@
 
     // Vào phòng
     window.vaoPhong = async function() {
-      playJoinSound(); // Phát âm thanh khi nhấn vào phòng, đảm bảo được iPhone hỗ trợ
+      playJoinSound();
 
       room = document.getElementById("roomInput").value.trim();
       if (!room) return alert("Nhập tên phòng!");
@@ -226,12 +224,15 @@
       const snapshot = await get(playerRef);
       const players = snapshot.val() || {};
 
+      // Đăng ký người chơi và onDisconnect cho từng mark
       if (!players.X) {
         myMark = "X";
         set(ref(db, `caro/${room}/players/X`), true);
+        onDisconnect(ref(db, `caro/${room}/players/X`)).remove();
       } else if (!players.O) {
         myMark = "O";
         set(ref(db, `caro/${room}/players/O`), true);
+        onDisconnect(ref(db, `caro/${room}/players/O`)).remove();
       } else {
         alert("Phòng đã đủ 2 người!");
         return;
@@ -256,7 +257,8 @@
           remove(ref(db, `caro/${room}/players/${myMark}`)).then(() => {
             get(ref(db, `caro/${room}/players`)).then(snap => {
               if (!snap.exists()) {
-                remove(ref(db, `caro/{room}`));
+                // Xóa toàn bộ phòng nếu không còn ai
+                remove(ref(db, `caro/${room}`));
               }
             });
           });
@@ -264,7 +266,6 @@
       };
     };
 
-    // Đánh cờ
     function danhCo(x, y) {
       if (!room) return alert("Chưa vào phòng!");
       if (isGameOver) return;
@@ -440,6 +441,10 @@
           }
         }
         prevPlayerCount = playerCount;
+        // Nếu không còn ai thì xóa toàn bộ phòng
+        if (playerCount === 0) {
+          remove(ref(db, `caro/${room}`));
+        }
       });
     }
   </script>
